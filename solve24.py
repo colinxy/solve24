@@ -1,9 +1,11 @@
+#! /usr/bin/env python3
+
 """
 24 GAME:
 With 4 numbers, use addition, subtraction, multiplication and
 division and parenthesis to achieve 24.
 
-Note: this is an extended version of 24solver, allowing more
+Note: this is an extended version of 24 solver, allowing more
 than 4 numbers as input, and targets other than 24. Also,
 operators other than addition, subtraction, multiplication and
 division can be supported. But one word of advice, do not put
@@ -15,25 +17,35 @@ numbers. The program makes use of reverse polish notation to
 enumerate any combination of numbers and operations, without
 the concern of parenthesis.
 
-The solver can not eliminate repeat such as 1 + 2 and 2 + 1 as
-for now, but will not include repeat as 1 + 1 twice.
-
-The time complexity for the solution is O(N! * M**(N-1) * N**2)
+The time complexity for the solution is O(N! * M^(N-1) * N^2)
 where N is the number of inputs and M is the number of allowed
 operations. Therefore, the execution time is going to increase
 dramatically as number of inputs increases.
+
+
+usage: solve24.py [-h] [-t TARGET]
+
+Solve the 24 game
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -t TARGET, --target TARGET
+                        specify target (default 24)
 """
 __author__ = 'yxy'
 
 
+import sys
 from time import time
-from itertools import product
-import operator
+import argparse
+from itertools import product, permutations
+import operator as op
 from fractions import Fraction
 
 
-target = 24
-set_of_operators = {operator.add, operator.sub, operator.mul, operator.truediv}
+set_of_operators = {op.add, op.sub, op.mul, op.truediv}
+op_repr = {op.add: '+', op.sub: '-',
+           op.mul: '*', op.truediv: '/'}
 rp_pattern_cache = {4: [['num', 'num', 'num', 'num',  'op',  'op',  'op'],
                         ['num', 'num', 'num',  'op', 'num',  'op',  'op'],
                         ['num', 'num', 'num',  'op',  'op', 'num',  'op'],
@@ -42,11 +54,14 @@ rp_pattern_cache = {4: [['num', 'num', 'num', 'num',  'op',  'op',  'op'],
                     }
 
 
-def solve24(numbers):
-    for i in permutation_formatted(numbers):  # number_patterns
-        for j in product(set_of_operators, repeat=len(numbers)-1):  # operator_patterns
-            for k in reverse_polish_pattern(len(numbers)):  # combination_patterns
-                notation = reverse_polish_notation(i, j, k)
+def solve24(numbers, target=24):
+    for num_patterns in permutations(numbers):
+        for op_patterns in product(set_of_operators,
+                         repeat=len(numbers)-1):
+            for combin_patterns in reverse_polish_pattern(len(numbers)):
+                notation = reverse_polish_notation(num_patterns,
+                                                   op_patterns,
+                                                   combin_patterns)
                 if reverse_polish_eval(notation) == target:
                     yield notation
 
@@ -55,14 +70,17 @@ def pretty_print(results, input_numbers):
     print()
     results = list(results)
     for result in results:
-        print(' '.join([str(num_or_op) if isinstance(num_or_op, int) else num_or_op.__name__ for num_or_op in result]))
+        print('     ',
+              ' '.join([str(num_or_op) if isinstance(num_or_op, int)
+                        else op_repr[num_or_op]
+                        for num_or_op in result]))
     print('===', len(results), "solution(s) for", sorted(input_numbers), '===')
 
 
 def reverse_polish_eval(stack):
-    assert len([i for i in stack if isinstance(i, int)]) * 2 - len(stack) - 1 == 0
+    assert len([i for i in stack if isinstance(i, int)]) * 2 - len(stack) == 1
 
-    if operator.pow in stack:
+    if op.pow in stack:
         return NotImplemented
 
     result_stack = []
@@ -73,36 +91,19 @@ def reverse_polish_eval(stack):
             x = result_stack.pop()
             y = result_stack.pop()
             try:
-                result_stack.append(num_or_op(y, x))
+                result_stack.append(Fraction(y, x)
+                                    if num_or_op == op.truediv
+                                    else num_or_op(y, x))
             except ZeroDivisionError:
-                return ZeroDivisionError
+                return
 
     return result_stack[0]
 
 
-def permutation(numbers):
-    """
-    input: a list of numbers, repeat allowed
-    output: all possible permutations of the given list
-    """
-    if len(numbers) == 1:
-        return [numbers]
-
-    result = []
-    for i in range(len(numbers)):
-        result.extend([j + [numbers[i]] for j in permutation(numbers[:i] + numbers[i+1:])])
-
-    return result
-
-
-def permutation_formatted(numbers):
-    result = permutation(numbers)
-    return sorted(set([tuple(i) for i in result]))
-
-
 def reverse_polish_pattern(input_count):
     """
-    Matching pattern: the number of numbers is larger than the number of operators at each point
+    Matching pattern: the number of numbers is larger than
+    the number of operators at each point
 
     All possible patterns for 4 numbers:
     num num num num  op  op  op
@@ -135,26 +136,45 @@ def reverse_polish_pattern(input_count):
     return result
 
 
-def reverse_polish_notation(number_pattern, operator_pattern, combination_pattern):
-    assert len(number_pattern) + len(operator_pattern) == len(combination_pattern)
-    number_pattern_local, operator_pattern_local = list(number_pattern), list(operator_pattern)
-    return [number_pattern_local.pop(0) if num_or_op == 'num' else operator_pattern_local.pop(0) for num_or_op in combination_pattern]
+def reverse_polish_notation(number_pattern,
+                            operator_pattern,
+                            combination_pattern):
+    assert len(number_pattern) + len(operator_pattern) == \
+           len(combination_pattern)
+
+    number_pattern_local, operator_pattern_local = \
+        list(reversed(number_pattern)), list(reversed(operator_pattern))
+
+    return [number_pattern_local.pop() if num_or_op == 'num'
+            else operator_pattern_local.pop()
+            for num_or_op in combination_pattern]
 
 
-def main():
+def main(target):
     input_numbers = []
+    index = 1
     while True:
         try:
-            input_numbers.append(int(input('Number please: ')))
+            input_numbers.append(int(input('Number ' +
+                                           str(index) +
+                                           ': ')))
+            index += 1
         except ValueError:
             # print(input_numbers)
             start = time()
-            pretty_print(solve24(input_numbers), input_numbers)
-            print('Execution time:', time() - start, '\n')
-            input_numbers = []
+            pretty_print(solve24(input_numbers, target), input_numbers)
+            print('Execution time: {0:.03} second(s)\n'.format(time()-start))
+            input_numbers.clear()
+            index = 1
+        except (Exception, KeyboardInterrupt):
+            print()
+            sys.exit()
 
 
 if __name__ == '__main__':
-    # starting_time = time()
-    main()
-    # print('Total running time:', time() - starting_time)
+    parser = argparse.ArgumentParser(description='Solve the 24 game')
+    parser.add_argument('-t', '--target', type=int,
+                        default=24, help='specify target (default 24)')
+    args = parser.parse_args()
+
+    main(args.target)
