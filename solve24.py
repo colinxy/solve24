@@ -10,7 +10,7 @@ than 4 numbers as input, and targets other than 24. Also,
 operators other than addition, subtraction, multiplication and
 division can be supported. To add a new operator, add the
 function of the operator into global variable `set_of_operators',
-and its representation into global vaiable `op_repr'.
+and its representation into global variable `op_repr'.
 The operator is assumed to be binary.
 
 The program gives all possible solutions to each set of input
@@ -26,7 +26,7 @@ operations. Therefore, the execution time is going to increase
 dramatically as number of inputs increases.
 
 
-usage: solve24.py [-h] [-t TARGET]
+usage: solve24.py [-h] [-t TARGET] [-q]
 
 Solve the 24 game
 
@@ -34,7 +34,8 @@ optional arguments:
   -h, --help            show this help message and exit
   -t TARGET, --target TARGET
                         specify target (default 24)
-"""
+  -q, --quick           turn on quick mode (find the first solution available)
+  """
 
 __author__ = 'yxy'
 
