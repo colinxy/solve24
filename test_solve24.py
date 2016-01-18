@@ -11,7 +11,7 @@ def test():
             expr = postfix2infix(sol)
             print(expr, target)
             if not eval(expr) == target:
-                print("INCORRECT")
+                print("****** INCORRECT ******")
                 print(nums)
                 print(target)
                 sys.exit()
