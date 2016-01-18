@@ -8,14 +8,17 @@ division and parenthesis to achieve 24.
 Note: this is an extended version of 24 solver, allowing more
 than 4 numbers as input, and targets other than 24. Also,
 operators other than addition, subtraction, multiplication and
-division can be supported. But one word of advice, do not put
-exponent into the operators that might cost memory error even
-for small inputs.
+division can be supported. To add a new operator, add the
+function of the operator into global variable `set_of_operators',
+and its representation into global vaiable `op_repr'.
+The operator is assumed to be binary.
 
 The program gives all possible solutions to each set of input
-numbers. The program makes use of reverse polish notation to
-enumerate any combination of numbers and operations, without
-the concern of parenthesis.
+numbers. The program makes use of reverse polish (postfix)
+notation to enumerate any combination of numbers and operations,
+without the concern of parenthesis.
+
+The program make use of brute force enumeration, and do not
 
 The time complexity for the solution is O(N! * M^(N-1) * N^2)
 where N is the number of inputs and M is the number of allowed
@@ -32,6 +35,7 @@ optional arguments:
   -t TARGET, --target TARGET
                         specify target (default 24)
 """
+
 __author__ = 'yxy'
 
 
@@ -46,42 +50,62 @@ from fractions import Fraction
 set_of_operators = {op.add, op.sub, op.mul, op.truediv}
 op_repr = {op.add: '+', op.sub: '-',
            op.mul: '*', op.truediv: '/'}
-rp_pattern_cache = {4: [['num', 'num', 'num', 'num',  'op',  'op',  'op'],
-                        ['num', 'num', 'num',  'op', 'num',  'op',  'op'],
-                        ['num', 'num', 'num',  'op',  'op', 'num',  'op'],
-                        ['num', 'num',  'op', 'num', 'num',  'op',  'op'],
-                        ['num', 'num',  'op', 'num',  'op', 'num',  'op']]
-                    }
+postfix_cache = {
+    4: [['num', 'num', 'num', 'num',  'op',  'op',  'op'],
+        ['num', 'num', 'num',  'op', 'num',  'op',  'op'],
+        ['num', 'num', 'num',  'op',  'op', 'num',  'op'],
+        ['num', 'num',  'op', 'num', 'num',  'op',  'op'],
+        ['num', 'num',  'op', 'num',  'op', 'num',  'op']],
+}
 
 
-def solve24(numbers, target=24):
-    for num_patterns in permutations(numbers):
+def solve24(nums, target=24):
+    for num_patterns in permutations(nums):
         for op_patterns in product(set_of_operators,
-                         repeat=len(numbers)-1):
-            for combin_patterns in reverse_polish_pattern(len(numbers)):
-                notation = reverse_polish_notation(num_patterns,
-                                                   op_patterns,
-                                                   combin_patterns)
-                if reverse_polish_eval(notation) == target:
+                                   repeat=len(nums)-1):
+            for comb_patterns in postfix_pattern(len(nums)):
+                notation = postfix_notation(num_patterns,
+                                            op_patterns,
+                                            comb_patterns)
+                if postfix_eval(notation) == target:
                     yield notation
 
 
-def pretty_print(results, input_numbers):
+def pretty_print(results, input_nums, quick):
+    """
+    results: Iterable
+    """
     print()
-    results = list(results)
+    count = 0
     for result in results:
-        print('     ',
-              ' '.join([str(num_or_op) if isinstance(num_or_op, int)
-                        else op_repr[num_or_op]
-                        for num_or_op in result]))
-    print('===', len(results), "solution(s) for", sorted(input_numbers), '===')
+        count += 1
+        print(postfix2infix(result))
+        if quick:
+            break
+
+    if not quick:
+        print(count, "solution(s) for", sorted(input_nums))
 
 
-def reverse_polish_eval(stack):
-    assert len([i for i in stack if isinstance(i, int)]) * 2 - len(stack) == 1
+def postfix2infix(postfix):
+    repr_stack = []
+    for token in postfix:
+        if isinstance(token, int):
+            repr_stack.append(str(token))
+        else:  # operator
+            rhs = repr_stack.pop()
+            lhs = repr_stack.pop()
+            expr = "({} {} {})".format(lhs, op_repr[token], rhs)
+            repr_stack.append(expr)
 
-    if op.pow in stack:
-        return NotImplemented
+    return repr_stack[0]
+
+
+def postfix_eval(stack):
+    # assert len([i for i in stack if isinstance(i, int)]) * 2 - len(stack) == 1
+
+    # if op.pow in stack:
+    #     return NotImplemented
 
     result_stack = []
     for num_or_op in stack:
@@ -100,10 +124,11 @@ def reverse_polish_eval(stack):
     return result_stack[0]
 
 
-def reverse_polish_pattern(input_count):
+def postfix_pattern(input_count):
     """
-    Matching pattern: the number of numbers is larger than
-    the number of operators at each point
+    Matching pattern: the number of numbers
+    is larger than the number of operators
+    at each point
 
     All possible patterns for 4 numbers:
     num num num num  op  op  op
@@ -113,59 +138,62 @@ def reverse_polish_pattern(input_count):
     num num  op num  op num  op
     """
 
-    if input_count in rp_pattern_cache:
-        return rp_pattern_cache[input_count]
+    if input_count in postfix_cache:
+        return postfix_cache[input_count]
 
-    def rp_pattern(n, patterns):
-        present_length = len(patterns)
-        for i in range(present_length):
-            if patterns[i].count('num') < n:
-                if patterns[i].count('num') - patterns[i].count('op') > 1:
-                    patterns.append(patterns[i].copy() + ['op'])
-                    patterns[i].append('num')
-                else:
-                    patterns[i].append('num')
-            else:
-                patterns[i].append('op')
 
     result = [[]]
     while len(result[0]) < 2 * input_count - 1:
-        rp_pattern(input_count, result)
-    rp_pattern_cache[input_count] = result
+        get_pattern(input_count, result)
+    postfix_cache[input_count] = result
 
     return result
 
 
-def reverse_polish_notation(number_pattern,
-                            operator_pattern,
-                            combination_pattern):
-    assert len(number_pattern) + len(operator_pattern) == \
-           len(combination_pattern)
+def get_pattern(n, patterns):
+    present_length = len(patterns)
+    for i in range(present_length):
+        if patterns[i].count('num') < n:
+            if patterns[i].count('num') - patterns[i].count('op') > 1:
+                patterns.append(patterns[i].copy() + ['op'])
+                patterns[i].append('num')
+            else:
+                patterns[i].append('num')
+        else:
+            patterns[i].append('op')
 
-    number_pattern_local, operator_pattern_local = \
-        list(reversed(number_pattern)), list(reversed(operator_pattern))
 
-    return [number_pattern_local.pop() if num_or_op == 'num'
-            else operator_pattern_local.pop()
-            for num_or_op in combination_pattern]
+def postfix_notation(num_pattern,
+                     op_pattern,
+                     comb_pattern):
+    # assert len(num_pattern) + len(op_pattern) == len(comb_pattern)
+
+    num_pattern_local, op_pattern_local = \
+        list(reversed(num_pattern)), list(reversed(op_pattern))
+
+    return [num_pattern_local.pop() if num_or_op == 'num'
+            else op_pattern_local.pop()
+            for num_or_op in comb_pattern]
 
 
-def main(target):
-    input_numbers = []
-    index = 1
+def main(target, quick):
+    input_nums = []
+
     while True:
+        index = 1
         try:
-            input_numbers.append(int(input('Number ' +
-                                           str(index) +
-                                           ': ')))
+            input_nums.append(int(input('Number {}: '.format(index))))
             index += 1
         except ValueError:
-            # print(input_numbers)
+            # print(input_nums)
+            if len(input_nums) == 0:
+                continue
+
             start = time()
-            pretty_print(solve24(input_numbers, target), input_numbers)
-            print('Execution time: {0:.03} second(s)\n'.format(time()-start))
-            input_numbers.clear()
-            index = 1
+            pretty_print(solve24(input_nums, target), input_nums, quick)
+            print('Execution time: {:.03} second(s)\n'
+                  .format(time()-start))
+            input_nums.clear()
         except (Exception, KeyboardInterrupt):
             print()
             sys.exit()
@@ -175,6 +203,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Solve the 24 game')
     parser.add_argument('-t', '--target', type=int,
                         default=24, help='specify target (default 24)')
+    parser.add_argument('-q', '--quick', action='store_true',
+                        help='turn on quick mode (find ' + \
+                             'the first solution available)')
     args = parser.parse_args()
 
-    main(args.target)
+    main(args.target, args.quick)
